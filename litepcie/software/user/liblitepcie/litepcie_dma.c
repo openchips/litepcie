@@ -167,6 +167,7 @@ void litepcie_dma_process(struct litepcie_dma_ctrl *dma)
         perror("poll");
         return;
     } else if (ret == 0) {
+        printf("poll timeout\n");
         /* timeout */
         return;
     }
@@ -198,7 +199,7 @@ void litepcie_dma_process(struct litepcie_dma_ctrl *dma)
     if (dma->fds.revents & POLLOUT) {
         if (dma->zero_copy) {
             /* count available buffers */
-            dma->buffers_available_write = DMA_BUFFER_COUNT / 2 - (dma->reader_sw_count - dma->reader_hw_count);
+            dma->buffers_available_write = DMA_BUFFER_COUNT - (dma->reader_sw_count - dma->reader_hw_count);
             dma->usr_write_buf_offset = dma->reader_sw_count % DMA_BUFFER_COUNT;
 
             /* update dma sw_count */

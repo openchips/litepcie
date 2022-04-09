@@ -344,7 +344,9 @@ static int check_pn_data(const uint32_t *buf, int count, uint32_t *pseed, int da
 
 static void dma_test(uint8_t zero_copy, uint8_t external_loopback, int data_width, int auto_rx_delay)
 {
-    static struct litepcie_dma_ctrl dma = {.use_reader = 1, .use_writer = 1};
+    static struct litepcie_dma_ctrl dma = {0};
+    dma.use_reader = 1;
+    dma.use_writer = 1;
     dma.loopback = external_loopback ? 0 : 1;
 
     if (data_width > 32 || data_width < 1) {
@@ -372,6 +374,11 @@ static void dma_test(uint8_t zero_copy, uint8_t external_loopback, int data_widt
     if (litepcie_dma_init(&dma, litepcie_device, zero_copy))
         exit(1);
 
+    /* Set initial available write buffers */
+    if (dma.use_writer) {
+        dma.buffers_available_write = DMA_BUFFER_COUNT;
+    }
+
     /* Test loop. */
     last_time = get_time_ms();
     for (;;) {
@@ -379,14 +386,9 @@ static void dma_test(uint8_t zero_copy, uint8_t external_loopback, int data_widt
         if (!keep_running)
             break;
 
-        /* Update DMA status. */
-        litepcie_dma_process(&dma);
-
 #ifdef DMA_CHECK_DATA
-        char *buf_wr;
-        char *buf_rd;
-
         /* DMA-TX Write. */
+        char *buf_wr;
         while (1) {
             /* Get Write buffer. */
             buf_wr = litepcie_dma_next_write_buffer(&dma);
@@ -396,6 +398,12 @@ static void dma_test(uint8_t zero_copy, uint8_t external_loopback, int data_widt
             /* Write data to buffer. */
             write_pn_data((uint32_t *) buf_wr, DMA_BUFFER_SIZE / sizeof(uint32_t), &seed_wr, data_width);
         }
+#endif
+
+        litepcie_dma_process(&dma);
+
+#ifdef DMA_CHECK_DATA
+        char *buf_rd;
 
         /* DMA-RX Read/Check */
         while (1) {
@@ -404,9 +412,7 @@ static void dma_test(uint8_t zero_copy, uint8_t external_loopback, int data_widt
             /* Break when no buffer available for Read. */
             if (!buf_rd)
                 break;
-            /* Skip the first 128 DMA loops. */
-            if (dma.writer_hw_count < 128*DMA_BUFFER_COUNT)
-                break;
+
             /* When running... */
             if (run) {
                 /* Check data in Read buffer. */
