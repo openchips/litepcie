@@ -349,11 +349,6 @@ static void dma_test(uint8_t zero_copy, uint8_t external_loopback, int data_widt
     if (litepcie_dma_init(&dma, litepcie_device, zero_copy))
         exit(1);
 
-    /* Set initial available write buffers */
-    if (dma.use_writer) {
-        dma.buffers_available_write = DMA_BUFFER_COUNT;
-    }
-
     /* Test loop. */
     last_time = get_time_ms();
     for (;;) {

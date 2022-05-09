@@ -109,6 +109,7 @@ int litepcie_dma_init(struct litepcie_dma_ctrl *dma, const char *device_name, ui
     } else {
         /* else: allocate it */
         if (dma->use_writer) {
+            dma->buffers_available_read = 0;
             dma->buf_rd = calloc(1, DMA_BUFFER_TOTAL_SIZE);
             if (!dma->buf_rd) {
                 fprintf(stderr, "%d: alloc failed\n", __LINE__);
@@ -116,6 +117,7 @@ int litepcie_dma_init(struct litepcie_dma_ctrl *dma, const char *device_name, ui
             }
         }
         if (dma->use_reader) {
+            dma->buffers_available_write = DMA_BUFFER_COUNT;
             dma->buf_wr = calloc(1, DMA_BUFFER_TOTAL_SIZE);
             if (!dma->buf_wr) {
                 free(dma->buf_rd);
