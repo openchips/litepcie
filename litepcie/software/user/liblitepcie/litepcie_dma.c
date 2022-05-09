@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -209,13 +210,23 @@ void litepcie_dma_process(struct litepcie_dma_ctrl *dma)
             checked_ioctl(dma->fds.fd, LITEPCIE_IOCTL_MMAP_DMA_READER_UPDATE, &dma->mmap_dma_update);
 
         } else {
-            len = write(dma->fds.fd, dma->buf_wr, DMA_BUFFER_TOTAL_SIZE);
-            if (len < 0) {
-                perror("write");
-                abort();
+            int wlen = (DMA_BUFFER_COUNT - dma->buffers_available_write) * DMA_BUFFER_SIZE;
+            int used = 0;
+
+            if (wlen > 0) {
+                len = write(dma->fds.fd, dma->buf_wr, wlen);
+                if (len < 0) {
+                    perror("write");
+                    abort();
+                }
+                if (len < wlen) {
+                    used = (wlen - len) / DMA_BUFFER_SIZE;
+                    memmove(dma->buf_wr, dma->buf_wr + len, DMA_BUFFER_SIZE * used);
+                }
             }
-            dma->buffers_available_write = len / DMA_BUFFER_SIZE;
-            dma->usr_write_buf_offset = 0;
+
+            dma->buffers_available_write = DMA_BUFFER_COUNT - used;
+            dma->usr_write_buf_offset    = used;
         }
     } else {
         dma->buffers_available_write = 0;
