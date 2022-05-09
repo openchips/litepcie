@@ -1,0 +1,6 @@
+*.a
+*.d
+*.o
+litepcie_dma_minimal_example
+litepcie_test
+litepcie_util
