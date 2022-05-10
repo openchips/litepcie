@@ -120,7 +120,7 @@ class LitePCIeDMAScatterGather(Module, AutoCSR):
                 table.sink.length.eq(self.value.fields.length),
                 table.sink.irq_disable.eq(self.value.fields.irq_disable),
                 table.sink.last_disable.eq(self.value.fields.last_disable),
-                table.sink.first.eq(table.level == 0),
+#                table.sink.first.eq(table.level == 0),
                 table.sink.valid.eq(self.we.re),
             # In Loop mode, the Table is automatically refilled.
             ).Else(
@@ -140,7 +140,7 @@ class LitePCIeDMAScatterGather(Module, AutoCSR):
             If(table.reset,
                 # Init count to 2**n-1 to have (index, count) == (0, 0) for the first Descriptor.
                 loop_index.eq(0),
-                loop_count.eq(2**len(loop_count) - 1),
+                loop_count.eq(0), # 2**len(loop_count) - 1),
             # When a Descriptor is consumned...
             ).Elif(table.source.valid & table.source.ready,
                 # Update Loop Status with current Loop Index/Count.
