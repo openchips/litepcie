@@ -378,28 +378,19 @@ void litepcie_stop_dma(struct litepcie_device *s)
 static void litepcie_check_reader(struct litepcie_device *s, struct litepcie_chan *chan)
 {
 	uint32_t loop_status;
-	unsigned long flags;
-	spin_lock_irqsave(&s->lock, flags);
-
-	 loop_status = litepcie_readl(s, chan->dma.base +
-								  PCIE_DMA_READER_TABLE_LOOP_STATUS_OFFSET);
-
+	loop_status = litepcie_readl(s, chan->dma.base +
+								 PCIE_DMA_READER_TABLE_LOOP_STATUS_OFFSET);
 	chan->dma.reader_hw_count &= 0xffffffffffff0000;
 	chan->dma.reader_hw_count |= loop_status & 0xffff;
 	if (chan->dma.reader_hw_count_last > chan->dma.reader_hw_count)
 		chan->dma.reader_hw_count += (1 << 16);
 
 	chan->dma.reader_hw_count_last = chan->dma.reader_hw_count;
-
-	spin_unlock_irqrestore(&s->lock, flags);
 }
 
 static void litepcie_check_writer(struct litepcie_device *s, struct litepcie_chan *chan)
 {
 	uint32_t loop_status;
-	unsigned long flags;
-	spin_lock_irqsave(&s->lock, flags);
-
 	loop_status = litepcie_readl(s, chan->dma.base +
 							     PCIE_DMA_WRITER_TABLE_LOOP_STATUS_OFFSET);
 	chan->dma.writer_hw_count &= 0xffffffffffff0000;
@@ -408,7 +399,6 @@ static void litepcie_check_writer(struct litepcie_device *s, struct litepcie_cha
 		chan->dma.writer_hw_count += (1 << 16);
 
 	chan->dma.writer_hw_count_last = chan->dma.writer_hw_count;
-	spin_unlock_irqrestore(&s->lock, flags);
 }
 
 static irqreturn_t litepcie_interrupt(int irq, void *data)
@@ -445,8 +435,6 @@ static irqreturn_t litepcie_interrupt(int irq, void *data)
 		/* dma reader interrupt handling */
 		if (irq_vector & (1 << chan->dma.reader_interrupt)) {
 
-			litepcie_check_reader(s, chan);
-
 #ifdef DEBUG_MSI
 			dev_dbg(&s->dev->dev, "MSI DMA%d Reader buf: %lld\n", i,
 				chan->dma.reader_hw_count);
@@ -456,8 +444,6 @@ static irqreturn_t litepcie_interrupt(int irq, void *data)
 		}
 		/* dma writer interrupt handling */
 		if (irq_vector & (1 << chan->dma.writer_interrupt)) {
-
-			litepcie_check_writer(s, chan);
 
 #ifdef DEBUG_MSI
 			dev_dbg(&s->dev->dev, "MSI DMA%d Writer buf: %lld\n", i,
@@ -610,6 +596,7 @@ static ssize_t litepcie_read(struct file *file, char __user *data, size_t size, 
 					       (chan->dma.writer_hw_count - chan->dma.writer_sw_count) > 0) < 0) {
 				return -ERESTARTSYS;
 			}
+			litepcie_check_writer(s, chan); /* update RX dma info from HW */
 			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
 		}
 	}
@@ -663,6 +650,7 @@ static ssize_t litepcie_write(struct file *file, const char __user *data, size_t
 			    chan->dma.reader_sw_count < (chan->dma.reader_hw_count + DMA_BUFFER_COUNT)) < 0) {
 				return -ERESTARTSYS;
 			}
+			litepcie_check_reader(s, chan);
 			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
 		}
 	}
@@ -891,7 +879,7 @@ static long litepcie_ioctl(struct file *file, unsigned int cmd,
 		if (m.enable != chan->dma.writer_enable) {
 			/* enable / disable DMA */
 			if (m.enable) {
-				litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
+				//litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
 				litepcie_dma_writer_start(chan->litepcie_dev, chan->index);
 			} else {
 				litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
@@ -924,7 +912,7 @@ static long litepcie_ioctl(struct file *file, unsigned int cmd,
 		if (m.enable != chan->dma.reader_enable) {
 			/* enable / disable DMA */
 			if (m.enable) {
-				litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
+				//litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
 				litepcie_dma_reader_start(chan->litepcie_dev, chan->index);
 			} else {
 				litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
