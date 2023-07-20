@@ -482,6 +482,8 @@ static ssize_t litepcie_read(struct file *file, char __user *data, size_t size, 
 	struct litepcie_chan *chan = chan_priv->chan;
 	struct litepcie_device *s = chan->litepcie_dev;
 
+	litepcie_check_writer(s, chan);
+
 	if (chan->dma.writer_hw_count == chan->dma.writer_sw_count) {
 		if (file->f_flags & O_NONBLOCK) {
 			return -EAGAIN;
