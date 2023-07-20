@@ -619,37 +619,48 @@ static unsigned int litepcie_poll(struct file *file, poll_table *wait)
 
 	struct litepcie_chan_priv *chan_priv = file->private_data;
 	struct litepcie_chan *chan = chan_priv->chan;
-#ifdef DEBUG_POLL
 	struct litepcie_device *s = chan->litepcie_dev;
-#endif
 
-	poll_wait(file, &chan->wait_rd, wait);
-	poll_wait(file, &chan->wait_wr, wait);
+	if (chan_priv->reader) {
+		poll_wait(file, &chan->wait_wr, wait);
 
-	litepcie_check_writer(s, chan); /* update RX dma info from HW */
-	litepcie_check_reader(s, chan); /* update TX dma info from HW */
-
+		/* update TX dma info from HW */
+		litepcie_check_reader(s, chan);
 #ifdef DEBUG_POLL
-	dev_dbg(&s->dev->dev, "poll: writer hw_count: %10lld / sw_count %10lld\n",
-	chan->dma.writer_hw_count, chan->dma.writer_sw_count);
-	dev_dbg(&s->dev->dev, "poll: reader hw_count: %10lld / sw_count %10lld\n",
-	chan->dma.reader_hw_count, chan->dma.reader_sw_count);
+		dev_dbg(&s->dev->dev, "poll: reader hw_count: %10lld / sw_count %10lld\n",
+		chan->dma.reader_hw_count, chan->dma.reader_sw_count);
 #endif
 
-	if ((chan->dma.writer_hw_count - chan->dma.writer_sw_count) > 1)
-		mask |= POLLIN | POLLRDNORM;
+		if ((chan->dma.reader_sw_count - chan->dma.reader_hw_count) < DMA_BUFFER_COUNT)
+			mask |= POLLOUT | POLLWRNORM;
+	}
 
-	if ((chan->dma.reader_sw_count - chan->dma.reader_hw_count) < DMA_BUFFER_COUNT)
-		mask |= POLLOUT | POLLWRNORM;
+	if (chan_priv->writer) {
+		poll_wait(file, &chan->wait_rd, wait);
+
+		/* update RX dma info from HW */
+		litepcie_check_writer(s, chan);
+#ifdef DEBUG_POLL
+		dev_dbg(&s->dev->dev, "poll: writer hw_count: %10lld / sw_count %10lld\n",
+			chan->dma.writer_hw_count, chan->dma.writer_sw_count);
+#endif
+
+		if ((chan->dma.writer_hw_count - chan->dma.writer_sw_count) > 1)
+			mask |= POLLIN | POLLRDNORM;
+	}
 
 	if (!mask) {
 		/* Caller will sleep, enable interrupts */
-		litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
-		litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
+		if (chan_priv->reader)
+			litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
+		if (chan_priv->writer)
+			litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
 	} else {
 		/* There is work todo, disable interrupts */
-		litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
-		litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
+		if (chan_priv->reader)
+			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
+		if (chan_priv->writer)
+			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
 	}
 
 	return mask;
