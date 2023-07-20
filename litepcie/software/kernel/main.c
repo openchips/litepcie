@@ -47,9 +47,6 @@
 #define LITEPCIE_NAME "litepcie"
 #define LITEPCIE_MINOR_COUNT 32
 
-// Undef to use prog mode for RX
-//#define USE_DMA_WRITER_LOOP
-
 struct litepcie_dma_chan {
 	uint32_t base;
 	uint32_t writer_interrupt;
@@ -184,43 +181,6 @@ static int litepcie_dma_init(struct litepcie_device *s)
 	return 0;
 }
 
-#ifdef USE_DMA_WRITER_LOOP
-static void litepcie_dma_writer_start(struct litepcie_device *s, int chan_num)
-{
-	struct litepcie_dma_chan *dmachan;
-	int i;
-
-	dmachan = &s->chan[chan_num].dma;
-
-	/* Fill DMA Writer descriptors. */
-	litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_ENABLE_OFFSET, 0);
-	litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_FLUSH_OFFSET, 1);
-	litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_LOOP_PROG_N_OFFSET, 0);
-	for (i = 0; i < DMA_BUFFER_COUNT; i++) {
-		/* Fill buffer size + parameters. */
-		litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_VALUE_OFFSET,
-#ifndef DMA_BUFFER_ALIGNED
-			DMA_LAST_DISABLE |
-#endif
-			DMA_BUFFER_SIZE);
-		/* Fill 32-bit Address LSB. */
-		litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_VALUE_OFFSET + 4, (dmachan->writer_handle[i] >>  0) & 0xffffffff);
-		/* Write descriptor (and fill 32-bit Address MSB for 64-bit mode). */
-		litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_WE_OFFSET,        (dmachan->writer_handle[i] >> 32) & 0xffffffff);
-	}
-	litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_LOOP_PROG_N_OFFSET, 1);
-
-	/* Clear counters. */
-	dmachan->writer_hw_count = 0;
-	dmachan->writer_hw_count_last = 0;
-	dmachan->writer_sw_count = 0;
-
-	/* Start DMA Writer. */
-	litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_ENABLE_OFFSET, 1);
-}
-
-#else
-
 static void litepcie_dma_writer_fill(struct litepcie_device *s, int chan_num)
 {
 	struct litepcie_dma_chan *dmachan;
@@ -270,7 +230,6 @@ static void litepcie_dma_writer_start(struct litepcie_device *s, int chan_num)
 	/* start dma writer */
 	litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_ENABLE_OFFSET, 1);
 }
-#endif
 
 static void litepcie_dma_writer_stop(struct litepcie_device *s, int chan_num)
 {
@@ -515,68 +474,6 @@ static int litepcie_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-#ifdef USE_DMA_WRITER_LOOP
-
-static ssize_t litepcie_read(struct file *file, char __user *data, size_t size, loff_t *offset)
-{
-	size_t len;
-	int i, ret;
-	int overflows;
-
-	struct litepcie_chan_priv *chan_priv = file->private_data;
-	struct litepcie_chan *chan = chan_priv->chan;
-	struct litepcie_device *s = chan->litepcie_dev;
-
-	litepcie_check_writer(s, chan);
-
-	if (chan->dma.writer_hw_count == chan->dma.writer_sw_count) {
-		if (file->f_flags & O_NONBLOCK) {
-			return -EAGAIN;
-
-		} else {
-			litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
-			if (wait_event_interruptible(chan->wait_rd,
-					       (chan->dma.writer_hw_count - chan->dma.writer_sw_count) > 0) < 0) {
-				return -ERESTARTSYS;
-			}
-			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
-		}
-	}
-
-	i = 0;
-	overflows = 0;
-	len = size;
-	while (len >= DMA_BUFFER_SIZE) {
-		if ((chan->dma.writer_hw_count - chan->dma.writer_sw_count) > 0) {
-			if ((chan->dma.writer_hw_count - chan->dma.writer_sw_count) > DMA_BUFFER_COUNT) {
-				overflows++;
-			} else {
-				ret = copy_to_user(data + (chan->block_size * i),
-						   chan->dma.writer_addr[chan->dma.writer_sw_count%DMA_BUFFER_COUNT],
-						   DMA_BUFFER_SIZE);
-				if (ret)
-					return -EFAULT;
-			}
-			len -= DMA_BUFFER_SIZE;
-			chan->dma.writer_sw_count += 1;
-			i++;
-		} else {
-			break;
-		}
-	}
-
-	if (overflows)
-		dev_err(&s->dev->dev, "Reading too late, %d buffers lost\n", overflows);
-
-#ifdef DEBUG_READ
-	dev_dbg(&s->dev->dev, "read: read %ld bytes out of %ld\n", size - len, size);
-#endif
-
-	return size - len;
-}
-
-#else
-
 static ssize_t litepcie_read(struct file *file, char __user *data, size_t size, loff_t *offset)
 {
 	size_t len;
@@ -627,7 +524,6 @@ static ssize_t litepcie_read(struct file *file, char __user *data, size_t size, 
 
 	return size - len;
 }
-#endif
 
 static ssize_t litepcie_write(struct file *file, const char __user *data, size_t size, loff_t *offset)
 {
@@ -960,10 +856,7 @@ static long litepcie_ioctl(struct file *file, unsigned int cmd,
 		}
 
 		chan->dma.writer_sw_count = m.sw_count;
-#ifndef USE_DMA_WRITER_LOOP
 		litepcie_dma_writer_fill(s, chan->index);
-#endif
-
 	}
 	break;
 	case LITEPCIE_IOCTL_MMAP_DMA_READER_UPDATE:
