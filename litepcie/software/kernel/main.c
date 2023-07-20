@@ -145,7 +145,6 @@ static void litepcie_disable_interrupt(struct litepcie_device *s, int irq_num)
 
 static int litepcie_dma_init(struct litepcie_device *s)
 {
-
 	int i, j;
 	struct litepcie_dma_chan *dmachan;
 
@@ -775,7 +774,6 @@ static long litepcie_ioctl(struct file *file, unsigned int cmd,
 		if (m.enable != chan->dma.writer_enable) {
 			/* enable / disable DMA */
 			if (m.enable) {
-				//litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
 				litepcie_dma_writer_start(chan->litepcie_dev, chan->index);
 			} else {
 				litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
@@ -808,7 +806,6 @@ static long litepcie_ioctl(struct file *file, unsigned int cmd,
 		if (m.enable != chan->dma.reader_enable) {
 			/* enable / disable DMA */
 			if (m.enable) {
-				//litepcie_enable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
 				litepcie_dma_reader_start(chan->litepcie_dev, chan->index);
 			} else {
 				litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
