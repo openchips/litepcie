@@ -494,8 +494,8 @@ static ssize_t litepcie_read(struct file *file, char __user *data, size_t size, 
 					       (chan->dma.writer_hw_count - chan->dma.writer_sw_count) > 0) < 0) {
 				return -ERESTARTSYS;
 			}
-			litepcie_check_writer(s, chan); /* update RX dma info from HW */
 			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.writer_interrupt);
+			litepcie_check_writer(s, chan);
 		}
 	}
 
@@ -547,8 +547,8 @@ static ssize_t litepcie_write(struct file *file, const char __user *data, size_t
 			    chan->dma.reader_sw_count < (chan->dma.reader_hw_count + DMA_BUFFER_COUNT)) < 0) {
 				return -ERESTARTSYS;
 			}
-			litepcie_check_reader(s, chan);
 			litepcie_disable_interrupt(chan->litepcie_dev, chan->dma.reader_interrupt);
+			litepcie_check_reader(s, chan);
 		}
 	}
 
