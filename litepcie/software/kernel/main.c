@@ -199,9 +199,9 @@ static void litepcie_dma_writer_fill(struct litepcie_device *s, int chan_num)
 #endif
 					DMA_BUFFER_SIZE);
 		litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_VALUE_OFFSET + 4,
-				dmachan->writer_handle[i]);
-		litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_WE_OFFSET, 1);
-
+				(dmachan->writer_handle[i] >>  0) & 0xffffffff);
+		litepcie_writel(s, dmachan->base + PCIE_DMA_WRITER_TABLE_WE_OFFSET,
+				(dmachan->writer_handle[i] >> 32) & 0xffffffff);
 		dmachan->writer_hw_count_fill++;
 	}
 
@@ -270,10 +270,10 @@ static void litepcie_dma_reader_fill(struct litepcie_device *s, int chan_num)
 				(!last ? DMA_IRQ_DISABLE : 0) |
 #endif
 				DMA_BUFFER_SIZE);
-		/* Fill 32-bit Address LSB. */
-		litepcie_writel(s, dmachan->base + PCIE_DMA_READER_TABLE_VALUE_OFFSET + 4, (dmachan->reader_handle[i] >>  0) & 0xffffffff);
-		/* Write descriptor (and fill 32-bit Address MSB for 64-bit mode). */
-		litepcie_writel(s, dmachan->base + PCIE_DMA_READER_TABLE_WE_OFFSET, (dmachan->reader_handle[i] >> 32) & 0xffffffff);
+		litepcie_writel(s, dmachan->base + PCIE_DMA_READER_TABLE_VALUE_OFFSET + 4,
+				(dmachan->reader_handle[i] >>  0) & 0xffffffff);
+		litepcie_writel(s, dmachan->base + PCIE_DMA_READER_TABLE_WE_OFFSET,
+				(dmachan->reader_handle[i] >> 32) & 0xffffffff);
 
 		dmachan->reader_hw_count_fill++;
 	}
