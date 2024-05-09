@@ -93,6 +93,7 @@ struct litepcie_device {
 	spinlock_t lock;
 	int minor_base;
 	int irqs;
+	uint32_t irq_ena;
 	int channels;
 };
 
@@ -128,20 +129,20 @@ static inline void litepcie_writel(struct litepcie_device *s, uint32_t addr, uin
 
 static void litepcie_enable_interrupt(struct litepcie_device *s, int irq_num)
 {
-	uint32_t v;
+	if (s->irq_ena & (1 << irq_num))
+		return;
 
-	v = litepcie_readl(s, CSR_PCIE_MSI_ENABLE_ADDR);
-	v |= (1 << irq_num);
-	litepcie_writel(s, CSR_PCIE_MSI_ENABLE_ADDR, v);
+	s->irq_ena |= (1 << irq_num);
+	litepcie_writel(s, CSR_PCIE_MSI_ENABLE_ADDR, s->irq_ena);
 }
 
 static void litepcie_disable_interrupt(struct litepcie_device *s, int irq_num)
 {
-	uint32_t v;
+	if (!(s->irq_ena & (1 << irq_num)))
+		return;
 
-	v = litepcie_readl(s, CSR_PCIE_MSI_ENABLE_ADDR);
-	v &= ~(1 << irq_num);
-	litepcie_writel(s, CSR_PCIE_MSI_ENABLE_ADDR, v);
+	s->irq_ena &= ~(1 << irq_num);
+	litepcie_writel(s, CSR_PCIE_MSI_ENABLE_ADDR, s->irq_ena);
 }
 
 static int litepcie_dma_init(struct litepcie_device *s)
